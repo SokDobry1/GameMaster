@@ -1,12 +1,11 @@
 import discord
+from discord import message
 from discord.ext import commands
 import traceback
 import sqlite3
+import db as dbase
 
-m_chat = None
-s_chat = None
 
-#client = discord.Client()
 bot = commands.Bot(command_prefix = "!")
 
 @bot.event
@@ -16,25 +15,15 @@ async def on_ready():
 
 def check(func):
     async def wrapper(ctx):
-        if ctx.message.channel.id == m_chat or m_chat == None:
+        server_id = ctx.message.guild.id
+        a_chat = dbase.get_chats(server_id)["admin"]
+        m_chat = dbase.get_chats(server_id)["master"]
+        if ctx.message.channel.id in [m_chat, a_chat] or (not a_chat):
             return await func(ctx)
         return 0
     wrapper.__name__ = func.__name__
     return wrapper
 
-
-@bot.command()
-@check
-async def init(ctx):
-    global m_chat, s_chat
-    id = ctx.message.channel.id
-    if m_chat == None:
-        m_chat = id
-        await ctx.send("Теперь это master channel")
-    elif s_chat == None and id != m_chat:
-        s_chat = id
-        await ctx.send("Теперь это slave channel")
-    else: await ctx.send("Недоступно")
 
 
 
@@ -47,10 +36,23 @@ async def say(ctx):
 
 @bot.command()
 @check
-async def get(ctx):
-    message = ctx.message
-    text = message.content[5:]
-    await ctx.send(getattr(message.channel.guild,text))
+async def init(ctx):
+    guild = ctx.message.guild
+    category = await guild.create_category("Game")
+    admin = await guild.create_text_channel("Управление", category=category)
+    master = await guild.create_text_channel("Главная", category=category)
+    slave = await guild.create_text_channel("Уведомления", category=category)
+    dbase.init(guild.id, admin.id, master.id, slave.id)
+    
+
+
+@bot.command()
+@check
+async def clear(ctx):
+    chats = dbase.get_chats(ctx.message.guild.id)
+    for i in chats:
+        await bot.get_channel(chats[i]).delete()
+    dbase.wipe(ctx.message.guild.id)
 
 
 @bot.command()
@@ -59,18 +61,12 @@ async def db(ctx):
     message = ctx.message
     text = message.content[4:]
     try:
-        con = sqlite3.connect('./game.sqlite')
-        cur = con.cursor()
-        cur.execute(text)
-        con.commit()
-        result = cur.fetchall()
-        con.close()
-        await ctx.send(result)
+        getattr(dbase, text)(message.guild.id,message.channel.id)
     except Exception as e:
         await ctx.send(traceback.format_exc())
 
 
-bot.run('ODczMTUzMTkwMjczNjEzOTI1.YQ0RRg.R3eaYo28pIou20bWaHnvp2JhPzE')
+bot.run('ODczMTUzMTkwMjczNjEzOTI1.YQ0RRg.KaGNf_pq7ukFF8FmXEHo0HxFbiQ')
 
 
 
