@@ -4,6 +4,7 @@ from discord.ext import commands
 import traceback
 import sqlite3
 import db as dbase
+from settings import *
 
 
 bot = commands.Bot(command_prefix = "!")
@@ -66,7 +67,7 @@ async def db(ctx):
         await ctx.send(traceback.format_exc())
 
 
-bot.run('ODczMTUzMTkwMjczNjEzOTI1.YQ0RRg.KaGNf_pq7ukFF8FmXEHo0HxFbiQ')
+bot.run(token)
 
 
 
