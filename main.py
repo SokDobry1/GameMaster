@@ -27,6 +27,7 @@ async def type(message):
 
 
 def update_gamestat(): pass
+def update_lobby(): pass
 
 
 
@@ -37,7 +38,7 @@ async def send_notification(ctx, text): # Отправляет text в кана�
         s_chat = guild.get_channel(s_chat)
         await s_chat.send(text)
 
-async def clear_notifications(ctx):
+async def clear_notifications(ctx): # Очищает канал "Уведомления"
     guild = ctx.message.guild
     s_chat = dbase.get_chats(guild.id)["slave"]
     if s_chat:
@@ -55,7 +56,7 @@ async def send_master(ctx, text): # Отправляет text в канал "Г�
         m_chat = guild.get_channel(m_chat)
         await m_chat.send(text)
 
-async def clear_master(ctx): # Удаляет сообщения в канале "Главная"
+async def clear_master(ctx): # Очищает канал "Главная"
     guild = ctx.message.guild
     m_chat = dbase.get_chats(guild.id)["master"]
     if m_chat:
@@ -72,9 +73,8 @@ async def clear_master(ctx): # Удаляет сообщения в канале
 def user_check(func): #Проверяет нужно ли отвечать на команду юзерского доступа
     async def wrapper(ctx, *args):
         server_id = ctx.message.guild.id
-        a_chat = dbase.get_chats(server_id)["admin"]
         m_chat = dbase.get_chats(server_id)["master"]
-        if ctx.message.channel.id in [m_chat, a_chat]:
+        if ctx.message.channel.id == m_chat:
             await func(ctx, *args)
     wrapper.__name__ = func.__name__
     return wrapper
@@ -96,7 +96,9 @@ def game_check(func): #Проверяет нужно ли отвечать на 
         m_chat = dbase.get_chats(server_id)["master"]
         if ctx.message.channel.id == m_chat and dbase.isGameStarted(server_id):
             await func(ctx, *args)
-            #await send_master(ctx, "*Обновил таблицу*")
+            
+            if dbase.isGameStarted(server_id):
+                await update_gamestat(ctx)
     wrapper.__name__ = func.__name__
     return wrapper
 
@@ -138,12 +140,12 @@ async def clear(ctx, *args): # Удаляет все смежные записи
 #==========ИГРА=====================
 
 
-async def update_players_list(ctx): # Отображает логированных игроков до начала матча
+async def update_lobby(ctx): # Отображает логированных игроков до начала матча
     await clear_master(ctx)
     server = ctx.message.guild
     i = 1
     if not dbase.isGameStarted(server.id):
-        text = "Список игроков:\n"
+        text = "Список ожидающих игроков:\n"
         for player in dbase.get_all_players(server.id):
             text += f"{i}. {(await server.fetch_member(player['discord_id'])).name}\n"
             i += 1
@@ -153,7 +155,9 @@ async def update_players_list(ctx): # Отображает логированн�
 
 
 async def update_gamestat(ctx):
-    pass
+    await clear_master(ctx)
+    server = ctx.message.guild
+    await send_master(ctx, "Таблица с данными")
 
 
 
@@ -166,6 +170,7 @@ async def start(ctx, *args): # Начинает игру с логированн
     dbase.add_players_on_gboard(ctx.message.guild.id)
     await clear_notifications(ctx)
     await send_notification(ctx, "Игра началась!")
+    await update_gamestat(ctx)
 
 
 
@@ -175,6 +180,8 @@ async def finish(ctx, *args): #Завершает игру досрочно
     dbase.clear_gboard(ctx.message.guild.id)
     await clear_notifications(ctx)
     await send_notification(ctx, "Игра была досрочно завершена")
+    await update_lobby(ctx)
+
 
 
 
@@ -190,7 +197,7 @@ async def login(ctx, *args): # Заносит игрока в базу логи�
     if dbase.get_player_id(discord_id, server_id) == None:
         dbase.add_player(discord_id,server_id)
         await send_notification(ctx, f"Добро пожаловать в игру, {message.author.mention}")
-        await update_players_list(ctx)
+        await update_lobby(ctx)
 
 
 @bot.command()
@@ -202,7 +209,7 @@ async def leave(ctx, *args): # Удаляет игрока из хаба/мат�
     if dbase.get_player_id(discord_id, server_id) != None:
         dbase.remove_player(discord_id,server_id)
         await send_notification(ctx, f"{message.author.mention} покинул игру.\nДо встречи!")
-        await update_players_list(ctx)
+        await update_lobby(ctx)
 
 
 
@@ -264,6 +271,7 @@ async def move(ctx, *args):
     except: 
         await send_notification(ctx, f"Неправильный ввод координат, {ctx.message.author.mention}")
         return
+
 
 
 
