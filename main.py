@@ -14,12 +14,23 @@ async def on_ready():
     print('We have logged in as {0.user}'.format(bot))
 
 
-def check(func):
+def user_check(func):
     async def wrapper(ctx):
         server_id = ctx.message.guild.id
         a_chat = dbase.get_chats(server_id)["admin"]
         m_chat = dbase.get_chats(server_id)["master"]
-        if ctx.message.channel.id in [m_chat, a_chat] or (not a_chat):
+        if ctx.message.channel.id in [m_chat, a_chat]:
+            return await func(ctx)
+        return 0
+    wrapper.__name__ = func.__name__
+    return wrapper
+
+
+def admin_check(func):
+    async def wrapper(ctx):
+        server_id = ctx.message.guild.id
+        a_chat = dbase.get_chats(server_id)["admin"]
+        if ctx.message.channel.id == a_chat or (not a_chat):
             return await func(ctx)
         return 0
     wrapper.__name__ = func.__name__
@@ -27,37 +38,45 @@ def check(func):
 
 
 
-
 @bot.command()
-@check
+@user_check
 async def say(ctx):
     await ctx.message.delete()
     await ctx.send(ctx.message.content[5:])
 
 
 @bot.command()
-@check
+@admin_check
 async def init(ctx):
     guild = ctx.message.guild
-    category = await guild.create_category("Game")
-    admin = await guild.create_text_channel("Управление", category=category)
-    master = await guild.create_text_channel("Главная", category=category)
-    slave = await guild.create_text_channel("Уведомления", category=category)
-    dbase.init(guild.id, admin.id, master.id, slave.id)
+
+    if not dbase.get_chats(guild.id)["admin"]:
+        category = await guild.create_category("Game")
+        admin = await guild.create_text_channel("Управление", category=category)
+        master = await guild.create_text_channel("Главная", category=category)
+        slave = await guild.create_text_channel("Уведомления", category=category)
+        dbase.init(guild.id, admin.id, master.id, slave.id)
+        await ctx.send("Бот развёрнут успешно")
+    else: await ctx.send("Бот уже развёрнут")
     
 
 
 @bot.command()
-@check
+@admin_check
 async def clear(ctx):
     chats = dbase.get_chats(ctx.message.guild.id)
-    for i in chats:
-        await bot.get_channel(chats[i]).delete()
-    dbase.wipe(ctx.message.guild.id)
+    if chats["admin"]:
+        category = None
+        for i in chats:
+            channel = bot.get_channel(chats[i])
+            category = channel.category
+            await channel.delete()
+        await category.delete()
+        dbase.wipe(ctx.message.guild.id)
 
 
 @bot.command()
-@check
+@admin_check
 async def db(ctx):
     message = ctx.message
     text = message.content[4:]
