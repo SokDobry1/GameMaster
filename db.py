@@ -48,8 +48,11 @@ def get_all_players(server_id):
     data = get(f"SELECT * FROM players WHERE server_id = {server_id}")
     return [{"id": i[0], "discord_id": i[1], "server_id": i[2]} for i in data]
 
-def get_all_gboard_players(server_id):
-    pass
+def get_all_gboard_players():
+    players = get(f"SELECT * FROM gboard_players")
+    return [{"id": data[0], "pos": data[1], "hp": data[2], "points": data[3], 
+            "recive_points": data[4], "send_points": data[5], "damage": data[6]} 
+            for data in players]
 
 def get_player_id(discord_id, server_id):
     return [*get(f"SELECT id FROM players WHERE discord_id = {discord_id} and \
@@ -66,11 +69,11 @@ def remove_player(discord_id, server_id):
 
 def add_players_on_gboard(server_id):
     players = get(f"SELECT id FROM players WHERE server_id = {server_id}")
-    size =  20 #get(f"SELECT size")
-    pos_x = randint(0, size); pos_y = randint(0, size)
+    board_size = 18 #get(f"SELECT size")
+    pos_x = randint(1, board_size); pos_y = randint(1, board_size)
     for player in players:
         while len(get(f"SELECT id FROM gboard_players WhERE pos = '{pos_x}:{pos_y}'")):
-            pos_x = randint(0, size); pos_y = randint(0, size)
+            pos_x = randint(1, board_size); pos_y = randint(1, board_size)
         insert(f"INSERT INTO gboard_players (id, pos, hp, points) VALUES \
                 ({player[0]}, '{pos_x}:{pos_y}', 3, 1)")
 
@@ -84,4 +87,32 @@ def isGameStarted(server_id):
     p0 = [*get(f"SELECT id FROM players WHERE server_id = {server_id}"), (None,)][0][0]
     if p0 and len(get(f"SELECT * FROM gboard_players WhERE id = {p0}")):
         return True
+    return False
+
+
+
+
+
+
+def get_gboard_player(discord_id, server_id):
+    id = get_player_id(discord_id, server_id)
+    data = [*get(f"SELECT * FROM gboard_players WHERE id = {id}"), [None]*7][0]
+    return {"id": data[0], "pos": data[1], "hp": data[2], "points": data[3], 
+            "recive_points": data[4], "send_points": data[5], "damage": data[6]}
+
+
+def update_gboard_player(data):
+    insert(f"UPDATE gboard_players SET pos = {data['pos']!r}, hp =  {data['hp']}, points =  {data['points']}, \
+             recive_points =  {data['recive_points']}, send_points =  {data['send_points']}, damage =  {data['damage']} \
+             WHERE id = {data['id']}")
+
+
+def can_step(server_id, pos):
+    board_size = 18
+    x, y = [int(i) for i in pos.split(":")]
+    if x > board_size or y > board_size: return False
+
+    on_pos = get(f"SELECT id FROM gboard_players WHERE pos = {pos!r}")
+    on_board = get(f"SELECT id FROM players WHERE server_id = {server_id}")
+    if all([i not in on_pos for i in on_board]): return True
     return False
