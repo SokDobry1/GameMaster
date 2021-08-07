@@ -16,11 +16,24 @@ async def on_ready():
 
 @bot.listen('on_message')
 async def type(message):
-    chat = message.channel.id
-    if chat == dbase.get_chats(message.guild.id)["slave"]:
-        await message.channel.set_permissions(message.author, read_messages=True,
-                                                      send_messages=False)
-        await message.delete()
+    if message.author != message.guild.me:
+        chat = message.channel.id
+        allowed_chats = dbase.get_chats(message.guild.id)
+        if chat == allowed_chats["slave"]:
+            await message.channel.set_permissions(message.author, read_messages=True,
+                                                        send_messages=False)
+        if chat in allowed_chats.values():
+            try: await message.delete()
+            except: pass
+
+
+async def send_notification(ctx, text):
+    guild = ctx.message.guild
+    s_chat = dbase.get_chats(guild.id)["slave"]
+    if s_chat:
+        s_chat = guild.get_channel(s_chat)
+        await s_chat.send(text)
+
 
 
 
@@ -45,11 +58,9 @@ def admin_check(func):
     return wrapper
 
 
-
 @bot.command()
 @user_check
 async def say(ctx):
-    await ctx.message.delete()
     await ctx.send(ctx.message.content[5:])
 
 
@@ -83,12 +94,27 @@ async def clear(ctx):
         dbase.wipe(ctx.message.guild.id)
 
 
+
 @bot.command()
-@admin_check
-async def test(ctx):
+@user_check
+async def login(ctx):
     message = ctx.message
-    roles = message.guild.self_role
-    await ctx.send(str(type(roles)))
+    server_id = message.guild.id
+    discord_id = message.author.id
+    if dbase.get_player_id(discord_id, server_id) == None:
+        dbase.add_player(discord_id,server_id)
+        await send_notification(ctx, f"Добро пожаловать в игру, {message.author.mention}")
+
+
+@bot.command()
+@user_check
+async def leave(ctx):
+    message = ctx.message
+    server_id = message.guild.id
+    discord_id = message.author.id
+    if dbase.get_player_id(discord_id, server_id) != None:
+        dbase.remove_player(discord_id,server_id)
+        await send_notification(ctx, f"{message.author.mention} покинул игру.\nДо встречи!")
 
 
 
