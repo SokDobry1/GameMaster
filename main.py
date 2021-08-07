@@ -14,6 +14,16 @@ async def on_ready():
     print('We have logged in as {0.user}'.format(bot))
 
 
+@bot.listen('on_message')
+async def type(message):
+    chat = message.channel.id
+    if chat == dbase.get_chats(message.guild.id)["slave"]:
+        await message.channel.set_permissions(message.author, read_messages=True,
+                                                      send_messages=False)
+        await message.delete()
+
+
+
 def user_check(func):
     async def wrapper(ctx):
         server_id = ctx.message.guild.id
@@ -21,7 +31,6 @@ def user_check(func):
         m_chat = dbase.get_chats(server_id)["master"]
         if ctx.message.channel.id in [m_chat, a_chat]:
             return await func(ctx)
-        return 0
     wrapper.__name__ = func.__name__
     return wrapper
 
@@ -32,7 +41,6 @@ def admin_check(func):
         a_chat = dbase.get_chats(server_id)["admin"]
         if ctx.message.channel.id == a_chat or (not a_chat):
             return await func(ctx)
-        return 0
     wrapper.__name__ = func.__name__
     return wrapper
 
@@ -77,13 +85,11 @@ async def clear(ctx):
 
 @bot.command()
 @admin_check
-async def db(ctx):
+async def test(ctx):
     message = ctx.message
-    text = message.content[4:]
-    try:
-        getattr(dbase, text)(message.guild.id,message.channel.id)
-    except Exception as e:
-        await ctx.send(traceback.format_exc())
+    roles = message.guild.self_role
+    await ctx.send(str(type(roles)))
+
 
 
 bot.run(token)
