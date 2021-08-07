@@ -1,5 +1,5 @@
 import discord
-from discord import message
+#from discord import message
 from discord.ext import commands
 import traceback
 import sqlite3
@@ -27,17 +27,38 @@ async def type(message):
             except: pass
 
 
-async def send_notification(ctx, text):
+
+
+
+async def send_notification(ctx, text): # Отправляет text в канал "Уведомления"
     guild = ctx.message.guild
     s_chat = dbase.get_chats(guild.id)["slave"]
     if s_chat:
         s_chat = guild.get_channel(s_chat)
         await s_chat.send(text)
 
+async def send_master(ctx, text): # Отправляет text в канал "Главная"
+    guild = ctx.message.guild
+    m_chat = dbase.get_chats(guild.id)["master"]
+    if m_chat:
+        m_chat = guild.get_channel(m_chat)
+        await m_chat.send(text)
+
+async def clear_master(ctx): # Удаляет сообщения в канале "Главная"
+    guild = ctx.message.guild
+    m_chat = dbase.get_chats(guild.id)["master"]
+    if m_chat:
+        m_chat = guild.get_channel(m_chat)
+        messages = await m_chat.history().flatten()
+        await m_chat.delete_messages(messages)
 
 
 
-def user_check(func):
+
+
+#========ОСНОВНЫЕ ОБОЛОЧКИ ДЛЯ КОМАНД========
+
+def user_check(func): #Проверяет нужно ли отвечать на команду юзерского доступа
     async def wrapper(ctx):
         server_id = ctx.message.guild.id
         a_chat = dbase.get_chats(server_id)["admin"]
@@ -48,7 +69,7 @@ def user_check(func):
     return wrapper
 
 
-def admin_check(func):
+def admin_check(func): #Проверяет нужно ли отвечать на команду админского доступа
     async def wrapper(ctx):
         server_id = ctx.message.guild.id
         a_chat = dbase.get_chats(server_id)["admin"]
@@ -57,16 +78,14 @@ def admin_check(func):
     wrapper.__name__ = func.__name__
     return wrapper
 
+#==============================================
 
-@bot.command()
-@user_check
-async def say(ctx):
-    await ctx.send(ctx.message.content[5:])
+
 
 
 @bot.command()
 @admin_check
-async def init(ctx):
+async def init(ctx): # Создаёт записи в бд и чаты на сервере
     guild = ctx.message.guild
 
     if not dbase.get_chats(guild.id)["admin"]:
@@ -82,7 +101,7 @@ async def init(ctx):
 
 @bot.command()
 @admin_check
-async def clear(ctx):
+async def clear(ctx): # Удаляет все смежные записи в бд и чаты на сервере
     chats = dbase.get_chats(ctx.message.guild.id)
     if chats["admin"]:
         category = None
@@ -95,26 +114,68 @@ async def clear(ctx):
 
 
 
+
+
+
+
+
+@bot.command()
+@admin_check
+async def start(ctx): # Начинает игру с логированными игроками
+    dbase.add_players_on_gboard(ctx.message.guild.id)
+    await send_notification(ctx, "Игра началась!")
+
+
+
+@bot.command()
+@admin_check
+async def finish(ctx): #Завершает игру досрочно
+    dbase.clear_gboard(ctx.message.guild.id)
+    await send_notification(ctx, "Игра была досрочно завершена")
+
+
+
+
+
+
+
+
+
+async def update_players_list(ctx): # Отображает логированных игроков до начала матча
+    await clear_master(ctx)
+    server = ctx.message.guild
+    i = 1
+    if not dbase.isGameStarted(server.id):
+        text = "Список игроков:\n"
+        for player in dbase.get_all_players(server.id):
+            text += f"{i}. {(await server.fetch_member(player['discord_id'])).name}\n"
+            i += 1
+        await send_master(ctx, text)
+
+
+
 @bot.command()
 @user_check
-async def login(ctx):
+async def login(ctx): # Заносит игрока в базу логированных (можно сказать хаб ожидания)
     message = ctx.message
     server_id = message.guild.id
     discord_id = message.author.id
     if dbase.get_player_id(discord_id, server_id) == None:
         dbase.add_player(discord_id,server_id)
         await send_notification(ctx, f"Добро пожаловать в игру, {message.author.mention}")
+        await update_players_list(ctx)
 
 
 @bot.command()
 @user_check
-async def leave(ctx):
+async def leave(ctx): # Удаляет игрока из хаба/матча
     message = ctx.message
     server_id = message.guild.id
     discord_id = message.author.id
     if dbase.get_player_id(discord_id, server_id) != None:
         dbase.remove_player(discord_id,server_id)
         await send_notification(ctx, f"{message.author.mention} покинул игру.\nДо встречи!")
+        await update_players_list(ctx)
 
 
 
