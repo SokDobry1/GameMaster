@@ -34,6 +34,7 @@ def update_gamestat(): pass
 def update_lobby(): pass
 def win_checker(): pass
 def get_user_help(): pass
+def check_next_turn(): pass
 admin_help = ""
 
 #==================ТЕХНИЧЕСКИЕ ФУНКЦИИ=========================
@@ -78,7 +79,7 @@ async def send_master(ctx, text, file=None): # Отправляет text в ка
 
         messages = await m_chat.history().flatten()
         if not len(messages):
-            f = discord.File(open("separator.jpg", "rb"))
+            f = discord.File(open("./media/separator.jpg", "rb"))
             await m_chat.send(get_user_help(), file=f)
 
         await m_chat.send(text, file=file)
@@ -89,10 +90,12 @@ async def clear_master(ctx, remove_all=False): # Очищает канал "Гл
     if m_chat:
         m_chat = guild.get_channel(m_chat)
         messages = await m_chat.history().flatten()
-        for i in messages:
-            try:
-                if len(i.attachments) == 0 or remove_all: await i.delete()
-            except: pass
+        try:
+            await m_chat.delete_messages(messages[0:-1])
+            if len(messages[-1].attachments) == 0 or remove_all:
+                await messages[-1].delete()
+        except: pass
+
 
 
 #==============================================
@@ -129,6 +132,7 @@ def game_alive_check(func): #Проверяет нужно ли отвечать
             hp = dbase.get_gboard_player(ctx.message.author.id, server_id)["hp"]
             if hp:
                 await func(ctx, *args)
+                check_next_turn(ctx)
                 await win_checker(ctx)
                 if dbase.isGameStarted(server_id):
                     await update_gamestat(ctx)
@@ -145,6 +149,7 @@ def game_ghost_check(func):
             hp = dbase.get_gboard_player(ctx.message.author.id, server_id)["hp"]
             if hp == 0:
                 await func(ctx, *args)
+                check_next_turn(ctx)
                 if dbase.isGameStarted(server_id):
                     await update_gamestat(ctx)
 
@@ -169,6 +174,7 @@ async def init(ctx, *args): # Создаёт записи в бд и чаты н
         slave = await guild.create_text_channel("Уведомления", category=category)
         dbase.init(guild.id, admin.id, master.id, slave.id)
         await update_lobby(ctx)
+        await admin_help_check(ctx.message)
         await ctx.send("Бот развёрнут успешно")
     else: await ctx.send("Бот уже развёрнут")
     
@@ -234,7 +240,7 @@ async def start(ctx, *args): # Начинает игру с логированн
 @admin_check
 async def finish(ctx, *args): #Завершает игру досрочно
     dbase.clear_gboard(ctx.message.guild.id)
-    await clear_notifications(ctx)
+    #await clear_notifications(ctx)
     await send_notification(ctx, "Игра была досрочно завершена")
     await clear_master(ctx, True)
     await update_lobby(ctx)
@@ -273,6 +279,29 @@ async def leave(ctx, *args): # Удаляет игрока из хаба/мат�
 
 
 #----------ИГРОВЫЕ КОМАНДЫ---------
+
+
+@bot.command()
+@admin_check
+async def kik(ctx, mention):
+    message = ctx.message
+    admin = message.author
+    server_id = message.guild.id
+    mention = message.mentions[0]
+    text = ""
+
+    if dbase.get_player_id(mention.id, server_id):
+        dbase.remove_player(mention.id, server_id)
+        text = f"{admin.mention} кикнул игрока {mention.mention}\nПока-пока"
+    else: text = f"Такого игрока нет, {admin.mention}"
+
+    await send_notification(ctx, text)
+
+    if dbase.isGameStarted(server_id):
+        await update_gamestat(ctx)
+    else: await update_lobby(ctx)
+
+
 
 
 @bot.command()
@@ -460,16 +489,35 @@ async def win_checker(ctx):
         hero_mention = (await server.fetch_member(hero['discord_id'])).mention
         dbase.clear_gboard(server.id)
 
-        pic = discord.File(open("win.jpg", "rb"))
+        pic = discord.File(open("./media/win.jpg", "rb"))
         await send_notification(ctx, f"{hero_mention} побеждает в этой игре, он\n\
 Нанёс урона: {stat['damage']}\nПожертвовал ОД: {stat['send_points']}\n\
 Получил ОД: {stat['recive_points']}\nПрими мои поздравления, победитель!", pic)
         await update_lobby(ctx)
 
     elif len(alive_users) == 0:
-        pic = discord.File(open("0surv.gif", "rb"))
+        pic = discord.File(open("./media/0surv.gif", "rb"))
         await send_notification(ctx, "", pic)
         
+
+
+def check_next_turn(ctx):
+    server_id = ctx.message.guild.id
+    for ghost in dbase.get_all_gboard_ghosts(server_id):
+        player = dbase.get_player_by_id(ghost["player_id"])
+        if dbase.isGhostCanMakeRequest(player["discord_id"], server_id):
+            return
+
+    players = dbase.get_all_gboard_players(server_id)
+    for i in players: 
+        if i["points"]: return
+
+    for data in players:
+        data["points"] += 1
+        dbase.update_gboard_player(data)
+        dbase.clear_all_ghosts_requests(server_id)
+
+
 
 
 #================ТЕХНИЧЕСКАЯ ЗОНА (ДАЛЬШЕ НИЧЕГО)=====================

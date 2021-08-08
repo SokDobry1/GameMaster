@@ -68,6 +68,7 @@ def get_player_by_id(id):
 
 def remove_player(discord_id, server_id):
     id = get_player_id(discord_id, server_id)
+    insert(f"DELETE FROM gboard_ghosts_requests WHERE player_id = {id}")
     insert(f"DELETE FROM gboard_players WHERE id = {id}")
     insert(f"DELETE FROM players WHERE discord_id = {discord_id} and server_id = {server_id}")
 
