@@ -1,4 +1,5 @@
 import discord
+from discord import message
 from discord.ext import commands
 import traceback
 import sqlite3
@@ -105,8 +106,6 @@ def game_check(func): #Проверяет нужно ли отвечать на 
 #==============================================
 
 
-
-
 @bot.command()
 @admin_check
 async def init(ctx, *args): # Создаёт записи в бд и чаты на сервере
@@ -195,7 +194,7 @@ async def login(ctx, *args): # Заносит игрока в базу логи�
     server_id = message.guild.id
     discord_id = message.author.id
     if dbase.get_player_id(discord_id, server_id) == None:
-        dbase.add_player(discord_id,server_id)
+        dbase.add_player(message.author.name, discord_id,server_id)
         await send_notification(ctx, f"Добро пожаловать в игру, {message.author.mention}")
         await update_lobby(ctx)
 
@@ -212,6 +211,15 @@ async def leave(ctx, *args): # Удаляет игрока из хаба/мат�
         await update_lobby(ctx)
 
 
+
+
+
+
+
+@bot.command()
+@game_check
+async def attack(ctx, mention, count):
+    pass
 
 
 

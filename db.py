@@ -40,18 +40,18 @@ def wipe(server_id): #Удаляет все данные о сервере
 
 
 
-def add_player(discord_id, server_id):
-    insert(f"INSERT INTO players (discord_id, server_id) VALUES ({discord_id}, {server_id})")
+def add_player(name, discord_id, server_id):
+    insert(f"INSERT INTO players (name, discord_id, server_id) VALUES ({name!r}, {discord_id}, {server_id})")
 
 
 def get_all_players(server_id):
     data = get(f"SELECT * FROM players WHERE server_id = {server_id}")
-    return [{"id": i[0], "discord_id": i[1], "server_id": i[2]} for i in data]
+    return [{"id": i[0], "name": i[1], "discord_id": i[2], "server_id": i[3]} for i in data]
 
 def get_all_gboard_players():
     players = get(f"SELECT * FROM gboard_players")
-    return [{"id": data[0], "pos": data[1], "hp": data[2], "points": data[3], 
-            "recive_points": data[4], "send_points": data[5], "damage": data[6]} 
+    return [{"id": data[0], "name": data[1], "pos": data[2], "hp": data[3], "points": data[4], 
+            "recive_points": data[5], "send_points": data[6], "damage": data[7]} 
             for data in players]
 
 def get_player_id(discord_id, server_id):
@@ -68,14 +68,14 @@ def remove_player(discord_id, server_id):
 
 
 def add_players_on_gboard(server_id):
-    players = get(f"SELECT id FROM players WHERE server_id = {server_id}")
+    players = get(f"SELECT id, name FROM players WHERE server_id = {server_id}")
     board_size = 18 #get(f"SELECT size")
     pos_x = randint(1, board_size); pos_y = randint(1, board_size)
     for player in players:
         while len(get(f"SELECT id FROM gboard_players WhERE pos = '{pos_x}:{pos_y}'")):
             pos_x = randint(1, board_size); pos_y = randint(1, board_size)
-        insert(f"INSERT INTO gboard_players (id, pos, hp, points) VALUES \
-                ({player[0]}, '{pos_x}:{pos_y}', 3, 1)")
+        insert(f"INSERT INTO gboard_players (id, name, pos, hp, points) VALUES \
+                ({player[0]}, {player[1]!r}, '{pos_x}:{pos_y}', 3, 1)")
 
 
 def clear_gboard(server_id):
@@ -97,8 +97,8 @@ def isGameStarted(server_id):
 def get_gboard_player(discord_id, server_id):
     id = get_player_id(discord_id, server_id)
     data = [*get(f"SELECT * FROM gboard_players WHERE id = {id}"), [None]*7][0]
-    return {"id": data[0], "pos": data[1], "hp": data[2], "points": data[3], 
-            "recive_points": data[4], "send_points": data[5], "damage": data[6]}
+    return {"id": data[0], "name": data[1], "pos": data[2], "hp": data[3], "points": data[4], 
+            "recive_points": data[5], "send_points": data[6], "damage": data[7]}
 
 
 def update_gboard_player(data):
