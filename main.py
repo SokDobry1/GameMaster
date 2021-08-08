@@ -14,6 +14,7 @@ bot = commands.Bot(command_prefix = "!")
 async def on_ready():
     print('We have logged in as {0.user}'.format(bot))
 
+def admin_help_check(): pass
 
 @bot.listen('on_message')
 async def type(message):
@@ -24,22 +25,38 @@ async def type(message):
             await message.channel.set_permissions(message.author, read_messages=True,
                                                         send_messages=False)
         if chat in allowed_chats.values():
+            await admin_help_check(message)
             try: await message.delete()
             except: pass
 
 
 def update_gamestat(): pass
 def update_lobby(): pass
+def win_checker(): pass
+def get_user_help(): pass
+admin_help = ""
 
 #==================ТЕХНИЧЕСКИЕ ФУНКЦИИ=========================
 
+#-----АДМИНКА------
+
+
+async def admin_help_check(message):
+    guild = message.guild
+    a_chat = dbase.get_chats(guild.id)["admin"]
+    if a_chat:
+        a_chat = guild.get_channel(a_chat)
+        messages = await a_chat.history().flatten()
+        if not len(messages): await a_chat.send(admin_help)
+
+
 #---УВЕДОМЛЕНИЯ----
-async def send_notification(ctx, text): # Отправляет text в канал "Уведомления"
+async def send_notification(ctx, text, file=None): # Отправляет text в канал "Уведомления"
     guild = ctx.message.guild
     s_chat = dbase.get_chats(guild.id)["slave"]
     if s_chat:
         s_chat = guild.get_channel(s_chat)
-        await s_chat.send(text)
+        await s_chat.send(text, file=file)
 
 
 async def clear_notifications(ctx): # Очищает канал "Уведомления"
@@ -53,20 +70,30 @@ async def clear_notifications(ctx): # Очищает канал "Уведомл�
 
 #-------ГЛАВНАЯ-------
 
-async def send_master(ctx, text): # Отправляет text в канал "Главная"
+async def send_master(ctx, text, file=None): # Отправляет text в канал "Главная"
     guild = ctx.message.guild
     m_chat = dbase.get_chats(guild.id)["master"]
     if m_chat:
         m_chat = guild.get_channel(m_chat)
-        await m_chat.send(text)
 
-async def clear_master(ctx): # Очищает канал "Главная"
+        messages = await m_chat.history().flatten()
+        if not len(messages):
+            f = discord.File(open("separator.jpg", "rb"))
+            await m_chat.send(get_user_help(), file=f)
+
+        await m_chat.send(text, file=file)
+
+async def clear_master(ctx, remove_all=False): # Очищает канал "Главная"
     guild = ctx.message.guild
     m_chat = dbase.get_chats(guild.id)["master"]
     if m_chat:
         m_chat = guild.get_channel(m_chat)
         messages = await m_chat.history().flatten()
-        await m_chat.delete_messages(messages)
+        for i in messages:
+            try:
+                if len(i.attachments) == 0 or remove_all: await i.delete()
+            except: pass
+
 
 #==============================================
 
@@ -102,6 +129,7 @@ def game_alive_check(func): #Проверяет нужно ли отвечать
             hp = dbase.get_gboard_player(ctx.message.author.id, server_id)["hp"]
             if hp:
                 await func(ctx, *args)
+                await win_checker(ctx)
                 if dbase.isGameStarted(server_id):
                     await update_gamestat(ctx)
 
@@ -127,6 +155,7 @@ def game_ghost_check(func):
 
 
 #===============ИНИЦИАЛИЗАЦИЯ БОТА=============
+
 
 @bot.command()
 @admin_check
@@ -196,6 +225,7 @@ async def start(ctx, *args): # Начинает игру с логированн
     dbase.add_players_on_gboard(ctx.message.guild.id)
     await clear_notifications(ctx)
     await send_notification(ctx, "Игра началась!")
+    await clear_master(ctx, True)
     await update_gamestat(ctx)
 
 
@@ -206,6 +236,7 @@ async def finish(ctx, *args): #Завершает игру досрочно
     dbase.clear_gboard(ctx.message.guild.id)
     await clear_notifications(ctx)
     await send_notification(ctx, "Игра была досрочно завершена")
+    await clear_master(ctx, True)
     await update_lobby(ctx)
 
 
@@ -415,6 +446,32 @@ async def snatch(ctx, *args):
 
 
 
+async def win_checker(ctx):
+    server = ctx.message.guild
+    alive_users = []
+
+    for player in dbase.get_all_gboard_players(server.id):
+        if player["hp"]:
+            alive_users += [player]
+
+    if len(alive_users) == 1:
+        stat = alive_users[0]
+        hero = dbase.get_player_by_id(alive_users[0]["id"])
+        hero_mention = (await server.fetch_member(hero['discord_id'])).mention
+        dbase.clear_gboard(server.id)
+
+        pic = discord.File(open("win.jpg", "rb"))
+        await send_notification(ctx, f"{hero_mention} побеждает в этой игре, он\n\
+Нанёс урона: {stat['damage']}\nПожертвовал ОД: {stat['send_points']}\n\
+Получил ОД: {stat['recive_points']}\nПрими мои поздравления, победитель!", pic)
+        await update_lobby(ctx)
+
+    elif len(alive_users) == 0:
+        pic = discord.File(open("0surv.gif", "rb"))
+        await send_notification(ctx, "", pic)
+        
+
+
 #================ТЕХНИЧЕСКАЯ ЗОНА (ДАЛЬШЕ НИЧЕГО)=====================
 
 
@@ -442,7 +499,67 @@ def pinger():
 Thread(target=pinger, daemon=True).start()
 
 
-bot.run(token)
+
+def get_user_help():
+    x = len(dbase.get("SELECT * FROM servers"))
+    return f"""Спасибо, что выбрали меня.
+Сейчас я развёрнут на {x} серверах.
+
+Автор игры: BurnedTuner#0367
+Авторs бота: VeDmEd_u_Ko#3837, Voladsky#6401
+
+Правила игры:
+Каждый игрок получает одно очко действия (ОД) в день.
+
+ОД можно тратить на одно из этих действий:
+
+1. Передвижение на 1 клетку в любую сторону (как король в шахматах)
+2. Отдать свои ОД игроку в радиусе 3 клеток
+3. Выстрелить в игрока в радиусе 3 клеток
+У каждого игрока есть 3 жизни
+После смерти игроки становятся "призраками"
+
+Возможные действия призраков:
+
+1. Если три призрака решили вместе помочь одному из игроков, он получает +1 ОД
+2. Если три призрака решили вместе помешать одному из игроков, он теряет 1 ОД
+3. Если призраков меньше трех, то их решение должно быть единогласным
+
+Очищение истории действий призраков и зачисление ОД происходит в 8 утра по МСК
+
+Победителем считается последний выживший игрок
+
+Помощь по командам:
+
+До старта игры:
+!login - Зайти в комнату ожидания (войти в уже начатую игру нельзя)
+!leave - Выйти из комнаты ожидания/игры
+
+Живым игрокам:
+!move [клетка] - Перемещает игрока на указанную клетку по кратчайшей траектории (формат клетки: <x><y>, например: А15)
+!attack @[имя] [урон] - Атакует упомянутого игрока
+!transfer @[имя] [сумма] - Передаёт упомянутому игроку указанную сумму ОД
+
+Призракам:
+!donate @[имя] - Создаёт запрос на пожертвование 1 ОД игроку
+!snatch @[имя] - Создаёт запрос на кражу 1 ОД у игрока
+
+Приятной игры!
+"""
+
+admin_help = """Этот чат предназначен только для команд управления игрой. Вся информация доступна в канале "главная".
+
+Совет администраторам: Желательно сделать этот чат скрытым для обычных игроков во избежание непредвиденных ситуаций
+
+Команды:
+!start - Начинает игру составом из комнаты ожидания
+!finish - Досрочно завершает игру
+!kik @[имя] - Удаляет упомянутого пользователя из игры
+
+!init - Разворачивает необходимые для бота чаты
+!clear - Удаляет всё созданное ботом на сервере
+
+Удачи!"""
 
 
 
@@ -461,3 +578,6 @@ async def on_message(message):
     except Exception as e: 
         await message.channel.send(traceback.format_exc())
 '''
+
+
+bot.run(token)

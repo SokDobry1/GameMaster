@@ -49,13 +49,6 @@ def get_all_players(server_id): # Все пользователи в зале о
     return [{"id": i[0], "name": i[1], "discord_id": i[2], "server_id": i[3]} for i in data]
 
 
-def get_all_gboard_players(server_id): # Данные о всех играющих пользователях на данном сервере
-    players = get(f"SELECT * FROM gboard_players WHERE server_id = {server_id}")
-    return [{"id": data[0], "name": data[1], "pos": data[2], "hp": data[3], "points": data[4], 
-            "recive_points": data[5], "send_points": data[6], "damage": data[7]} 
-            for data in players]
-
-
 def global_get_gboard_players():
     players = get(f"SELECT * FROM gboard_players")
     return [{"id": data[0], "name": data[1], "pos": data[2], "hp": data[3], "points": data[4], 
@@ -66,6 +59,11 @@ def global_get_gboard_players():
 def get_player_id(discord_id, server_id):
     return [*get(f"SELECT id FROM players WHERE discord_id = {discord_id} and \
                  server_id = {server_id}"), (None,)][0][0]
+
+
+def get_player_by_id(id):
+    data = [*get(f"SELECT * FROM players WHERE id = {id}"), [None]*4][0]
+    return {"id": data[0], "name": data[1], "discord_id": data[2], "server_id": data[3]}
 
 
 def remove_player(discord_id, server_id):
@@ -112,6 +110,18 @@ def get_gboard_player(discord_id, server_id):
     else: data = get(f"SELECT * FROM gboard_players WHERE id = {id}")[0]
     return {"id": data[0], "name": data[1], "pos": data[2], "hp": data[3], "points": data[4], 
             "recive_points": data[5], "send_points": data[6], "damage": data[7]}
+
+
+def get_all_gboard_players(server_id): # Данные о всех играющих пользователях на данном сервере
+    gboard_players = []
+    players = get(f"SELECT id FROM players WHERE server_id = {server_id}")
+    for player in players:
+        temp = get(f"SELECT * FROM gboard_players WHERE id = {player[0]}")[0]
+        if len(temp): gboard_players += [temp]
+
+    return [{"id": data[0], "name": data[1], "pos": data[2], "hp": data[3], "points": data[4], 
+            "recive_points": data[5], "send_points": data[6], "damage": data[7]} 
+            for data in gboard_players]
 
 
 def update_gboard_player(data):
