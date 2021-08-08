@@ -40,23 +40,33 @@ def wipe(server_id): #Удаляет все данные о сервере
 
 
 
-def add_player(name, discord_id, server_id):
+def add_player(name, discord_id, server_id): # Добавляет пользователя в зал ожидания
     insert(f"INSERT INTO players (name, discord_id, server_id) VALUES ({name!r}, {discord_id}, {server_id})")
 
 
-def get_all_players(server_id):
+def get_all_players(server_id): # Все пользователи в зале ожидания
     data = get(f"SELECT * FROM players WHERE server_id = {server_id}")
     return [{"id": i[0], "name": i[1], "discord_id": i[2], "server_id": i[3]} for i in data]
 
-def get_all_gboard_players():
+
+def get_all_gboard_players(server_id): # Данные о всех играющих пользователях на данном сервере
+    players = get(f"SELECT * FROM gboard_players WHERE server_id = {server_id}")
+    return [{"id": data[0], "name": data[1], "pos": data[2], "hp": data[3], "points": data[4], 
+            "recive_points": data[5], "send_points": data[6], "damage": data[7]} 
+            for data in players]
+
+
+def global_get_gboard_players():
     players = get(f"SELECT * FROM gboard_players")
     return [{"id": data[0], "name": data[1], "pos": data[2], "hp": data[3], "points": data[4], 
             "recive_points": data[5], "send_points": data[6], "damage": data[7]} 
             for data in players]
 
+
 def get_player_id(discord_id, server_id):
     return [*get(f"SELECT id FROM players WHERE discord_id = {discord_id} and \
                  server_id = {server_id}"), (None,)][0][0]
+
 
 def remove_player(discord_id, server_id):
     id = get_player_id(discord_id, server_id)
@@ -77,8 +87,10 @@ def add_players_on_gboard(server_id):
         insert(f"INSERT INTO gboard_players (id, name, pos, hp, points) VALUES \
                 ({player[0]}, {player[1]!r}, '{pos_x}:{pos_y}', 3, 1)")
 
+def clear_all_ghosts_requests(): pass
 
 def clear_gboard(server_id):
+    clear_all_ghosts_requests(server_id)
     players = get(f"SELECT id FROM players WHERE server_id = {server_id}")
     for player in players: insert(f"DELETE FROM gboard_players WHERE id = {player[0]}")
 
@@ -96,7 +108,8 @@ def isGameStarted(server_id):
 
 def get_gboard_player(discord_id, server_id):
     id = get_player_id(discord_id, server_id)
-    data = [*get(f"SELECT * FROM gboard_players WHERE id = {id}"), [None]*7][0]
+    if id == None: data = [None]*8
+    else: data = get(f"SELECT * FROM gboard_players WHERE id = {id}")[0]
     return {"id": data[0], "name": data[1], "pos": data[2], "hp": data[3], "points": data[4], 
             "recive_points": data[5], "send_points": data[6], "damage": data[7]}
 
@@ -116,3 +129,34 @@ def can_step(server_id, pos):
     on_board = get(f"SELECT id FROM players WHERE server_id = {server_id}")
     if all([i not in on_pos for i in on_board]): return True
     return False
+
+
+
+def global_clear_ghosts_requests():
+    insert("DELETE FROM gboard_ghosts_requests")
+
+def clear_all_ghosts_requests(server_id):
+    insert(f"DELETE FROM gboard_ghosts_requests WHERE server_id = {server_id}")
+
+def get_all_gboard_ghosts(server_id):
+    return [i[0] for i in get(f"SELECT id FROM gboard_players WHERE hp = 0")]
+
+
+def make_ghost_request(discord_id, server_id, _type, data):
+    id = get_player_id(discord_id, server_id)
+    insert(f"INSERT INTO gboard_ghosts_requests (player_id, server_id, type, data)\
+            VALUES ({id}, {server_id}, {_type!r}, {data!r})")
+
+
+def get_equal_ghosts_requests(server_id, _type, data):
+    return [i[0] for i in get(f"SELECT player_id FROM gboard_ghosts_requests WHERE \
+                                server_id = {server_id} and type = {_type!r} and data = {data!r}")]
+
+
+def isGhostCanMakeRequest(discord_id, server_id):
+    id = get_player_id(discord_id, server_id)
+    if id:
+        if not len(get(f"SELECT player_id FROM gboard_ghosts_requests WHERE player_id = {id}")):
+            return True
+    return False
+

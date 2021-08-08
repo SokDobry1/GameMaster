@@ -1,3 +1,4 @@
+from typing import Text
 import discord
 from discord import message
 from discord.ext import commands
@@ -30,14 +31,16 @@ async def type(message):
 def update_gamestat(): pass
 def update_lobby(): pass
 
+#==================ТЕХНИЧЕСКИЕ ФУНКЦИИ=========================
 
-
+#---УВЕДОМЛЕНИЯ----
 async def send_notification(ctx, text): # Отправляет text в канал "Уведомления"
     guild = ctx.message.guild
     s_chat = dbase.get_chats(guild.id)["slave"]
     if s_chat:
         s_chat = guild.get_channel(s_chat)
         await s_chat.send(text)
+
 
 async def clear_notifications(ctx): # Очищает канал "Уведомления"
     guild = ctx.message.guild
@@ -48,7 +51,7 @@ async def clear_notifications(ctx): # Очищает канал "Уведомл�
         await s_chat.delete_messages(messages)
 
 
-
+#-------ГЛАВНАЯ-------
 
 async def send_master(ctx, text): # Отправляет text в канал "Главная"
     guild = ctx.message.guild
@@ -65,7 +68,7 @@ async def clear_master(ctx): # Очищает канал "Главная"
         messages = await m_chat.history().flatten()
         await m_chat.delete_messages(messages)
 
-
+#==============================================
 
 
 
@@ -91,20 +94,39 @@ def admin_check(func): #Проверяет нужно ли отвечать на
     return wrapper
 
 
-def game_check(func): #Проверяет нужно ли отвечать на игровую команду
+def game_alive_check(func): #Проверяет нужно ли отвечать на игровую команду для живых
     async def wrapper(ctx, *args):
         server_id = ctx.message.guild.id
         m_chat = dbase.get_chats(server_id)["master"]
         if ctx.message.channel.id == m_chat and dbase.isGameStarted(server_id):
-            await func(ctx, *args)
-            
-            if dbase.isGameStarted(server_id):
-                await update_gamestat(ctx)
+            hp = dbase.get_gboard_player(ctx.message.author.id, server_id)["hp"]
+            if hp:
+                await func(ctx, *args)
+                if dbase.isGameStarted(server_id):
+                    await update_gamestat(ctx)
+
+    wrapper.__name__ = func.__name__
+    return wrapper
+
+
+def game_ghost_check(func):
+    async def wrapper(ctx, *args):
+        server_id = ctx.message.guild.id
+        m_chat = dbase.get_chats(server_id)["master"]
+        if ctx.message.channel.id == m_chat and dbase.isGameStarted(server_id):
+            hp = dbase.get_gboard_player(ctx.message.author.id, server_id)["hp"]
+            if hp == 0:
+                await func(ctx, *args)
+                if dbase.isGameStarted(server_id):
+                    await update_gamestat(ctx)
+
     wrapper.__name__ = func.__name__
     return wrapper
 
 #==============================================
 
+
+#===============ИНИЦИАЛИЗАЦИЯ БОТА=============
 
 @bot.command()
 @admin_check
@@ -117,6 +139,7 @@ async def init(ctx, *args): # Создаёт записи в бд и чаты н
         master = await guild.create_text_channel("Главная", category=category)
         slave = await guild.create_text_channel("Уведомления", category=category)
         dbase.init(guild.id, admin.id, master.id, slave.id)
+        await update_lobby(ctx)
         await ctx.send("Бот развёрнут успешно")
     else: await ctx.send("Бот уже развёрнут")
     
@@ -136,8 +159,12 @@ async def clear(ctx, *args): # Удаляет все смежные записи
         dbase.wipe(ctx.message.guild.id)
 
 
-#==========ИГРА=====================
+#=============================================
 
+
+#====================ИГРА=====================
+
+#--------ВЫВОД ИНФОРМАЦИИ-----
 
 async def update_lobby(ctx): # Отображает логированных игроков до начала матча
     await clear_master(ctx)
@@ -161,7 +188,7 @@ async def update_gamestat(ctx):
 
 
 
-
+#----ВЗАИМОДЕЙСТВИЕ С ИГРОВЫМ ПОЛЕМ-----
 
 @bot.command()
 @admin_check
@@ -184,7 +211,7 @@ async def finish(ctx, *args): #Завершает игру досрочно
 
 
 
-
+#--------ВЗАИМОДЕЙСТВИЕ ИГРОКОВ С ЛОББИ---------
 
 
 @bot.command()
@@ -195,7 +222,7 @@ async def login(ctx, *args): # Заносит игрока в базу логи�
     discord_id = message.author.id
     if dbase.get_player_id(discord_id, server_id) == None:
         dbase.add_player(message.author.name, discord_id,server_id)
-        await send_notification(ctx, f"Добро пожаловать в игру, {message.author.mention}")
+        await send_notification(ctx, f"Добро пожаловать в зал ожидания, {message.author.mention}\nУстраивайся поудобнее")
         await update_lobby(ctx)
 
 
@@ -214,17 +241,56 @@ async def leave(ctx, *args): # Удаляет игрока из хаба/мат�
 
 
 
+#----------ИГРОВЫЕ КОМАНДЫ---------
 
 
 @bot.command()
-@game_check
-async def attack(ctx, mention, count):
-    pass
+@game_alive_check
+async def attack(ctx, mention, damage):
+    message = ctx.message
+    player = message.author.mention
+    mention = message.mentions[0]; damage = abs(int(damage))
+    server_id = ctx.message.guild.id
+
+    data_sender = dbase.get_gboard_player(message.author.id, server_id)
+    data_reciver = dbase.get_gboard_player(mention.id, server_id)
+
+    if not data_reciver["id"]:
+        await send_notification(ctx, f"Пользователь не учавствет в игре, {player}")
+        return
+
+    x_sender, y_sender = [int(i) for i in data_sender["pos"].split(":")]
+    x_reciver, y_reciver = [int(i) for i in data_reciver["pos"].split(":")]
+
+    if data_reciver["hp"] < damage: damage = data_reciver["hp"]
+    pos_delta = max(abs(x_sender - x_reciver), abs(y_sender - y_reciver))
+    text = ""
+
+    if pos_delta > 3: text = f"Слишком далеко, {player}"
+    elif data_sender["points"] < damage: text = f"У тебя недостаточно ОД для атаки, {player}"
+    else:
+        data_reciver["hp"] -= damage
+        data_sender["points"] -= damage
+        data_sender["damage"] += damage
+
+        if data_reciver["hp"] <= 0:
+            data_reciver["pos"] = ""
+
+        dbase.update_gboard_player(data_sender)
+        dbase.update_gboard_player(data_reciver)
+        text = f"{player} нанес {mention.mention} {damage} ед. урона"
+
+    await send_notification(ctx, text)
+
+    if data_reciver["hp"] <= 0:
+        await send_notification(ctx, f"{mention.mention} погиб")
+
+
 
 
 
 @bot.command()
-@game_check
+@game_alive_check
 async def transfer(ctx, mention, count):
     message = ctx.message
     player = message.author.mention
@@ -234,17 +300,22 @@ async def transfer(ctx, mention, count):
     data_sender = dbase.get_gboard_player(message.author.id, server_id)
     data_reciver = dbase.get_gboard_player(mention.id, server_id)
 
+    if not data_reciver["id"]:
+        await send_notification(ctx, f"Пользователь не учавствет в игре, {player}")
+        return
+
     x_sender, y_sender = [int(i) for i in data_sender["pos"].split(":")]
     x_reciver, y_reciver = [int(i) for i in data_reciver["pos"].split(":")]
     pos_delta = max(abs(x_sender - x_reciver), abs(y_sender - y_reciver))
     text = ""
 
-    if not data_reciver["id"]: text = f"Пользователь не учавствет в игре, {player}"
-    elif pos_delta > 3: text = f"Слишком далеко, {player}"
+    if pos_delta > 3: text = f"Слишком далеко, {player}"
     elif data_sender["points"] < count: text = f"У тебя недостаточно ОД для отправки, {player}"
     else:
         data_reciver["points"] += count
+        data_reciver["recive_points"] += count
         data_sender["points"] -= count
+        data_sender["send_points"] += count
         dbase.update_gboard_player(data_sender)
         dbase.update_gboard_player(data_reciver)
         text = f"{player} передал {mention.mention} {count} ОД"
@@ -253,11 +324,8 @@ async def transfer(ctx, mention, count):
 
 
 
-
-
-
 @bot.command()
-@game_check
+@game_alive_check
 async def move(ctx, *args):
     server_id = ctx.message.guild.id
     pos = ctx.message.content[6:].upper()
@@ -282,17 +350,82 @@ async def move(ctx, *args):
 
 
 
+#----------ПРИЗРАКИ--------------
 
 
+@bot.command()
+@game_ghost_check
+async def donate(ctx, *args):
+    message = ctx.message
+    server_id = ctx.message.guild.id
+    player = message.author
+    mention = message.mentions[0]
+    text = ""
+    reciver_hp = dbase.get_gboard_player(mention.id, server_id)["hp"]
+
+    if not dbase.isGhostCanMakeRequest(player.id, server_id):
+        text = f"{player.mention}, на сегодня ты больше не можешь делать запросов"
+    elif reciver_hp == 0:
+        text = f"{player.mention}, призрак не может влиять на призраков"
+    elif reciver_hp == None:
+        text = f"Пользователь не учавствет в игре, {player.mention}"
+    else:
+        text = f"Призрак {player.mention} сделал свой ход"
+        dbase.make_ghost_request(player.id, server_id, "donate", mention.name)
+    
+    await send_notification(ctx, text)
+
+    temp = dbase.get_equal_ghosts_requests(server_id, "donate", mention.name)
+    if len(temp) == len(dbase.get_all_gboard_ghosts(server_id)) or len(temp) > 2:
+        data = dbase.get_gboard_player(mention.id, server_id)
+        data["points"] += 1
+        dbase.update_gboard_player(data)
+        await send_notification(ctx, f"Игрок {mention.mention} получил 1 ОД от призраков")
+
+
+@bot.command()
+@game_ghost_check
+async def snatch(ctx, *args):
+    message = ctx.message
+    server_id = ctx.message.guild.id
+    player = message.author
+    mention = message.mentions[0]
+    text = ""
+    reciver_hp = dbase.get_gboard_player(mention.id, server_id)["hp"]
+
+    if not dbase.isGhostCanMakeRequest(player.id, server_id):
+        text = f"{player.mention}, на сегодня ты больше не можешь делать запросов"
+    elif reciver_hp == 0:
+        text = f"{player.mention}, призрак не может влиять на призраков"
+    elif reciver_hp == None:
+        text = f"Пользователь не учавствет в игре, {player.mention}"
+    else:
+        text = f"Призрак {player.mention} сделал свой ход"
+        dbase.make_ghost_request(player.id, server_id, "snatch", mention.name)
+    
+    await send_notification(ctx, text)
+
+    temp = dbase.get_equal_ghosts_requests(server_id, "snatch", mention.name)
+    if len(temp) == len(dbase.get_all_gboard_ghosts(server_id)) or len(temp) > 2:
+        data = dbase.get_gboard_player(mention.id, server_id)
+        data["points"] -= 1
+        dbase.update_gboard_player(data)
+        await send_notification(ctx, f"Призраки забрали 1 ОД у {mention.mention}")
+
+
+
+
+#================ТЕХНИЧЕСКАЯ ЗОНА (ДАЛЬШЕ НИЧЕГО)=====================
 
 
 from threading import Thread
 import time
 
 def sentinel():
-    for data in dbase.get_all_gboard_players():
+    for data in dbase.global_get_gboard_players():
         data["points"] += 1
         dbase.update_gboard_player(data)
+        dbase.global_clear_ghosts_requests()
 
 
 def pinger():
