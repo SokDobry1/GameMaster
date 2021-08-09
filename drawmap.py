@@ -84,8 +84,7 @@ def load_map(players_data, env_data):
     ret.paste(table, (img.width, 0))
 
     buffer = BytesIO()
-    ret.save(buffer,format="PNG") 
-    #myimage = buffer.getvalue()
+    ret.save(buffer,format="PNG")
     buffer.seek(0)
 
     return buffer
