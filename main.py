@@ -6,6 +6,7 @@ import traceback
 import sqlite3
 import db as dbase
 from settings import *
+from drawmap import load_map
 
 
 bot = commands.Bot(command_prefix = "!")
@@ -28,6 +29,11 @@ async def type(message):
             await admin_help_check(message)
             try: await message.delete()
             except: pass
+
+@bot.listen('on_guild_remove')
+async def react(guild):
+    dbase.wipe(guild.id)
+
 
 
 def update_gamestat(): pass
@@ -218,7 +224,8 @@ async def update_lobby(ctx): # Отображает логированных и�
 async def update_gamestat(ctx):
     await clear_master(ctx)
     server = ctx.message.guild
-    await send_master(ctx, "Таблица с данными")
+    pic = load_map(dbase.get_all_gboard_players(server.id), {"size":18})
+    await send_master(ctx, "", file=discord.File(pic, "file.png"))
 
 
 
