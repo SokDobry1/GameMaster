@@ -16,10 +16,11 @@ def centered_table(w, h, txt, color):
 
 def load_map(players_data, env_data):
     sz = env_data['size'] + 1
-    map = [[-1 for i in range(sz - 1)] for i in range(18)]
+    map = [[-1 for i in range(sz - 1)] for i in range(sz - 1)]
     for x in players_data:
-        pos = x['pos'].split(':')
-        map[int(pos[0]) - 1][int(pos[1]) - 1] = x['id']
+        if x['pos'] != '':
+            pos = x['pos'].split(':')
+            map[int(pos[1]) - 1][int(pos[0]) - 1] = x['id']
     rectSize = 40
     w = sz * rectSize + 1
     h = sz * rectSize + 1
@@ -49,7 +50,7 @@ def load_map(players_data, env_data):
             if (map[i][j] == -1):
                 draw.rectangle([fpx, fpy, fpx+rectSize, fpy+rectSize], outline=1)
             else:
-                r, g, b = (int(str(map[i][j])[::-1]) * 1244 + 144) ** 3 % 255, ((map[i][j] * 5352 + 42311) * 14221) % 255, ((map[i][j] * 1244 + 144) ** 3) % 255
+                r, g, b = (int(str(map[i][j])[::-1]) * 1244 + 144) * 3 % 255, ((map[i][j] * 5352 + 42311) * 14221) % 255, ((map[i][j] * 1244 + 144) * 3) % 255
                 draw.rectangle([fpx, fpy, fpx+rectSize, fpy+rectSize], fill=(r, g, b), outline=1)
                 pl = get_player_by_id(str(map[i][j]))
                 draw.text((fpx + 2, fpy + 6), pl['name'][0:3], font=font, stroke_width=1, stroke_fill='black')
@@ -77,7 +78,7 @@ def load_map(players_data, env_data):
     for p in players_data:
         i = 0
         for x in p:
-            if x not in ["id", "pos"]:
+            if x not in ["id", "pos"] and p['pos'] != '':
                 table.paste(centered_table(widthes[i], 32, str(p[x]), colors[p['id']]), (fpx, fpy))
                 fpx += widthes[i] - 1
                 i += 1
