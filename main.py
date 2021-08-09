@@ -504,7 +504,7 @@ async def win_checker(ctx):
 def check_next_turn(ctx):
     server_id = ctx.message.guild.id
     for ghost in dbase.get_all_gboard_ghosts(server_id):
-        player = dbase.get_player_by_id(ghost["player_id"])
+        player = dbase.get_player_by_id(ghost)
         if dbase.isGhostCanMakeRequest(player["discord_id"], server_id):
             return
 
