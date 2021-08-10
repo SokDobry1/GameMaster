@@ -310,6 +310,19 @@ async def kik(ctx, mention):
 
 
 
+@bot.command()
+@admin_check
+async def next(ctx):
+    server_id = ctx.message.guild
+    players = dbase.get_all_gboard_players(server_id)
+
+    for data in players:
+        data["points"] += 1
+        dbase.update_gboard_player(data)
+        dbase.clear_all_ghosts_requests(server_id)
+    dbase.clear_all_ghosts_requests(server_id)
+
+
 
 @bot.command()
 @game_alive_check
@@ -522,7 +535,7 @@ def check_next_turn(ctx):
     for data in players:
         data["points"] += 1
         dbase.update_gboard_player(data)
-        dbase.clear_all_ghosts_requests(server_id)
+    dbase.clear_all_ghosts_requests(server_id)
 
 
 
@@ -610,10 +623,15 @@ admin_help = """Этот чат предназначен только для к�
 Команды:
 !start - Начинает игру составом из комнаты ожидания
 !finish - Досрочно завершает игру
-!kik @[имя] - Удаляет упомянутого пользователя из игры
 
 !init - Разворачивает необходимые для бота чаты
 !clear - Удаляет всё созданное ботом на сервере
+
+Во время игры:
+
+!kik @[имя] - Удаляет упомянутого пользователя из игры
+!next - Следующий ход
+
 
 Удачи!
 
