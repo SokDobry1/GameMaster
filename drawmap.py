@@ -9,7 +9,7 @@ def centered_table(w, h, txt, color):
     txtbox = Image.new('RGB', (w, h), color)
     drawtxt = ImageDraw.Draw(txtbox)
     drawtxt.rectangle((0,0,w-1,h-1), outline=1)
-    font = ImageFont.truetype('arial.ttf', 18)
+    font = ImageFont.truetype('./arial.ttf', 18)
     wt, ht = drawtxt.textsize(txt, font=font)
     drawtxt.text(((w-wt)//2,(h-ht)//2), txt, font=font, fill="black")
     return txtbox
@@ -27,7 +27,7 @@ def load_map(players_data, env_data):
     img = Image.new('RGB', (w, h), 'white')
     draw = ImageDraw.Draw(img)
     fpx, fpy = 0, rectSize
-    font = ImageFont.truetype('arial.ttf', 20)
+    font = ImageFont.truetype('./arial.ttf', 20)
     lit = 1
     draw.rectangle([0, 0, rectSize, rectSize], outline=1)
     for i in range(sz):
@@ -44,7 +44,7 @@ def load_map(players_data, env_data):
         lit = chr(ord(lit) + 1)
     fpx, fpy = rectSize, rectSize
     colors = {}
-    font = ImageFont.truetype('arial.ttf', 16)
+    font = ImageFont.truetype('./arial.ttf', 16)
     for i in range(sz - 1):
         for j in range(sz - 1):
             if (map[i][j] == -1):
